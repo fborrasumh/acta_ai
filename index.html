@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ActaAI — Generador de Actas</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: #f0f4f8; min-height: 100vh; color: #1a2332; }
+
+  .app-header { background: linear-gradient(135deg, #1e3a5f 0%, #2d5a8e 100%); padding: 2rem 1.5rem 3.5rem; position: relative; overflow: hidden; }
+  .app-header::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 40px; background: #f0f4f8; clip-path: ellipse(55% 100% at 50% 100%); }
+  .header-icon { width: 56px; height: 56px; background: rgba(255,255,255,0.15); border-radius: 16px; display: flex; align-items: center; justify-content: center; font-size: 1.6rem; color: #fff; }
+
+  .steps-bar { display: flex; align-items: center; margin: 2rem auto 1.5rem; max-width: 680px; padding: 0 1.5rem; }
+  .step-item { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
+  .step-circle { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #c8d8e8; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; font-weight: 600; color: #8aa0b8; transition: all 0.3s; position: relative; z-index: 1; }
+  .step-circle.active { border-color: #2d5a8e; background: #2d5a8e; color: #fff; box-shadow: 0 0 0 4px rgba(45,90,142,0.15); }
+  .step-circle.done { border-color: #2d5a8e; background: #2d5a8e; color: #fff; }
+  .step-label { font-size: 0.7rem; font-weight: 500; color: #8aa0b8; text-align: center; white-space: nowrap; }
+  .step-label.active { color: #2d5a8e; font-weight: 600; }
+  .step-connector { flex: 1; height: 2px; background: #c8d8e8; margin-bottom: 22px; transition: background 0.3s; }
+  .step-connector.done { background: #2d5a8e; }
+
+  .card { background: #fff; border-radius: 20px; padding: 2rem; box-shadow: 0 2px 12px rgba(30,58,95,0.07); border: 1px solid #e2eaf3; }
+  .form-label { font-size: 0.8rem; font-weight: 600; color: #4a6580; letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 0.4rem; display: block; }
+  input[type="text"], input[type="password"], input[type="date"], textarea, select { width: 100%; border: 1.5px solid #d0dcea; border-radius: 10px; padding: 0.65rem 0.9rem; font-family: inherit; font-size: 0.92rem; color: #1a2332; background: #f7fafd; outline: none; transition: border-color 0.2s, box-shadow 0.2s; }
+  input:focus, textarea:focus, select:focus { border-color: #2d5a8e; box-shadow: 0 0 0 3px rgba(45,90,142,0.1); background: #fff; }
+
+  .mode-tabs { display: flex; border: 1.5px solid #d0dcea; border-radius: 12px; overflow: hidden; margin-bottom: 1.5rem; }
+  .mode-tab { flex: 1; padding: 0.75rem 1rem; border: none; background: #f7fafd; font-family: inherit; font-size: 0.88rem; font-weight: 500; color: #6b8caa; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.4rem; }
+  .mode-tab:first-child { border-right: 1.5px solid #d0dcea; }
+  .mode-tab.active { background: #2d5a8e; color: #fff; }
+  .mode-tab:hover:not(.active) { background: #edf4fc; color: #2d5a8e; }
+
+  .upload-zone { border: 2px dashed #b0c8e0; border-radius: 14px; padding: 2.5rem 1.5rem; text-align: center; cursor: pointer; transition: all 0.25s; background: #f7fafd; position: relative; }
+  .upload-zone:hover, .upload-zone.dragover { border-color: #2d5a8e; background: #edf4fc; }
+  .upload-zone.has-file { border-color: #2d5a8e; background: #edf4fc; }
+  .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+  .mic-btn { width: 80px; height: 80px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; transition: all 0.2s; margin: 0 auto; }
+  .mic-btn.idle { background: #2d5a8e; color: #fff; box-shadow: 0 4px 16px rgba(45,90,142,0.3); }
+  .mic-btn.idle:hover { background: #1e3a5f; transform: scale(1.05); }
+  .mic-btn.recording { background: #e74c3c; color: #fff; animation: pulse-mic 1s ease infinite; }
+  .mic-btn.paused { background: #f39c12; color: #fff; }
+
+  .btn-primary { background: #2d5a8e; color: #fff; border: none; border-radius: 12px; padding: 0.8rem 1.8rem; font-family: inherit; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.2s, transform 0.1s; display: inline-flex; align-items: center; gap: 0.5rem; }
+  .btn-primary:hover { background: #1e3a5f; }
+  .btn-primary:disabled { background: #a0b8d0; cursor: not-allowed; }
+  .btn-secondary { background: transparent; color: #2d5a8e; border: 1.5px solid #2d5a8e; border-radius: 12px; padding: 0.75rem 1.5rem; font-family: inherit; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem; }
+  .btn-secondary:hover { background: #edf4fc; }
+  .btn-ghost { background: transparent; color: #6b8caa; border: none; border-radius: 10px; padding: 0.6rem 1rem; font-family: inherit; font-size: 0.85rem; cursor: pointer; transition: color 0.2s; display: inline-flex; align-items: center; gap: 0.4rem; }
+  .btn-ghost:hover { color: #2d5a8e; }
+
+  .progress-track { height: 6px; background: #e0eaf5; border-radius: 99px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, #2d5a8e, #5b9bd5); border-radius: 99px; transition: width 0.4s ease; }
+
+  .transcript-box { background: #f7fafd; border: 1.5px solid #d0dcea; border-radius: 12px; padding: 1rem 1.2rem; font-size: 0.88rem; line-height: 1.7; color: #2a3d52; min-height: 120px; max-height: 260px; overflow-y: auto; font-family: 'JetBrains Mono', monospace; white-space: pre-wrap; word-break: break-word; }
+
+  .acta-section { margin-bottom: 1.5rem; }
+  .acta-section-title { font-size: 0.75rem; font-weight: 700; color: #2d5a8e; letter-spacing: 0.08em; text-transform: uppercase; border-bottom: 2px solid #e0eaf5; padding-bottom: 0.4rem; margin-bottom: 0.8rem; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; background: #edf4fc; color: #2d5a8e; border-radius: 99px; padding: 3px 10px; font-size: 0.78rem; font-weight: 500; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.4); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes pulse-mic { 0% { box-shadow: 0 0 0 0 rgba(231,76,60,0.4); } 70% { box-shadow: 0 0 0 14px rgba(231,76,60,0); } 100% { box-shadow: 0 0 0 0 rgba(231,76,60,0); } }
+
+  .waveform { display: flex; align-items: center; justify-content: center; gap: 3px; height: 36px; }
+  .wave-bar { width: 4px; background: #e74c3c; border-radius: 99px; animation: wave 1.2s ease-in-out infinite; }
+  .wave-bar:nth-child(1){animation-delay:0s} .wave-bar:nth-child(2){animation-delay:.1s} .wave-bar:nth-child(3){animation-delay:.2s}
+  .wave-bar:nth-child(4){animation-delay:.3s} .wave-bar:nth-child(5){animation-delay:.4s} .wave-bar:nth-child(6){animation-delay:.2s} .wave-bar:nth-child(7){animation-delay:.1s}
+  @keyframes wave { 0%,100%{height:6px} 50%{height:28px} }
+
+  .rec-timer { font-family: 'JetBrains Mono', monospace; font-size: 1.4rem; font-weight: 600; color: #e74c3c; letter-spacing: 0.05em; }
+
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: #1e3a5f; color: #fff; padding: 0.7rem 1.2rem; border-radius: 12px; font-size: 0.88rem; font-weight: 500; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 9999; transform: translateY(120%); transition: transform 0.3s ease; display: flex; align-items: center; gap: 0.5rem; }
+  .toast.show { transform: translateY(0); }
+  .toast.error { background: #c0392b; }
+  .toast.success { background: #1a6b3c; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Tipo acta buttons */
+  .tipo-btn { background:#f7fafd; border:1.5px solid #d0dcea; border-radius:12px; padding:0.8rem 0.9rem; cursor:pointer; transition:all 0.2s; display:flex; flex-direction:column; align-items:flex-start; gap:3px; text-align:left; font-family:inherit; }
+  .tipo-btn i { font-size:1rem; color:#8aa0b8; margin-bottom:2px; }
+  .tipo-btn span { font-size:0.88rem; font-weight:600; color:#1a2332; }
+  .tipo-btn small { font-size:0.75rem; color:#8aa0b8; line-height:1.3; }
+  .tipo-btn:hover { border-color:#2d5a8e; background:#edf4fc; }
+  .tipo-btn:hover i, .tipo-btn:hover span { color:#2d5a8e; }
+  .tipo-btn.active { border-color:#2d5a8e; background:#edf4fc; }
+  .tipo-btn.active i, .tipo-btn.active span { color:#2d5a8e; }
+  .tipo-btn.active { box-shadow:0 0 0 3px rgba(45,90,142,0.12); }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <div style="max-width:680px;margin:0 auto;display:flex;align-items:center;gap:1rem;">
+    <div class="header-icon"><i class="fa-solid fa-file-contract"></i></div>
+    <div>
+      <h1 style="font-size:1.6rem;font-weight:700;color:#fff;margin:0;letter-spacing:-0.02em;">ActaAI</h1>
+      <p style="color:#a8c4e0;font-size:0.85rem;margin:0;margin-top:2px;">De la reunión al acta formal en segundos</p>
+    </div>
+  </div>
+</header>
+
+<div class="steps-bar">
+  <div class="step-item">
+    <div class="step-circle active" id="sc1"><i class="fa-solid fa-gear" style="font-size:0.8rem;"></i></div>
+    <span class="step-label active" id="sl1">Configurar</span>
+  </div>
+  <div class="step-connector" id="con1"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc2"><i class="fa-solid fa-microphone" style="font-size:0.8rem;"></i></div>
+    <span class="step-label" id="sl2">Transcribir</span>
+  </div>
+  <div class="step-connector" id="con2"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc3"><i class="fa-solid fa-sliders" style="font-size:0.8rem;"></i></div>
+    <span class="step-label" id="sl3">Tipo de acta</span>
+  </div>
+  <div class="step-connector" id="con3"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc4"><i class="fa-solid fa-file-lines" style="font-size:0.8rem;"></i></div>
+    <span class="step-label" id="sl4">Generar acta</span>
+  </div>
+</div>
+
+<main style="max-width:680px;margin:0 auto;padding:0 1.5rem 3rem;">
+
+  <!-- PANEL 1: CONFIGURAR -->
+  <div class="panel active" id="panel1">
+    <div class="card">
+      <h2 style="font-size:1.05rem;font-weight:700;margin:0 0 1.5rem;color:#1e3a5f;">
+        <i class="fa-solid fa-gear" style="margin-right:0.5rem;color:#2d5a8e;"></i>Configura la reunión
+      </h2>
+      <div style="margin-bottom:1.2rem;">
+        <label class="form-label">Tipo de reunión</label>
+        <select id="tipoReunion">
+          <option>Reunión de departamento / comisión universitaria</option>
+          <option>Tutoría o reunión con estudiantes</option>
+          <option>Reunión de proyecto de investigación</option>
+          <option>Reunión general</option>
+        </select>
+      </div>
+      <div style="margin-bottom:1.2rem;">
+        <label class="form-label">Nombre / asunto</label>
+        <input type="text" id="nombreReunion" placeholder="Ej. Comisión de TFGs — Junio 2025">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem;">
+        <div><label class="form-label">Fecha</label><input type="date" id="fechaReunion"></div>
+        <div><label class="form-label">Lugar (opcional)</label><input type="text" id="lugarReunion" placeholder="Ej. Sala de juntas EPSO"></div>
+      </div>
+      <div style="margin-bottom:1.2rem;">
+        <label class="form-label">Asistentes <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#8aa0b8;">(uno por línea)</span></label>
+        <textarea id="asistentes" rows="4" placeholder="María García&#10;Juan Martínez&#10;Ana López"></textarea>
+      </div>
+      <div style="margin-bottom:1.5rem;">
+        <label class="form-label">Clave API OpenAI <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#8aa0b8;">(para generar el acta)</span></label>
+        <div style="position:relative;">
+          <input type="password" id="apiKey" placeholder="sk-..." style="padding-right:2.8rem;">
+          <button onclick="toggleApiKey()" style="position:absolute;right:0.8rem;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#6b8caa;font-size:0.9rem;">
+            <i class="fa-regular fa-eye" id="eyeIcon"></i>
+          </button>
+        </div>
+        <p style="font-size:0.75rem;color:#8aa0b8;margin:0.4rem 0 0;display:flex;align-items:center;gap:0.3rem;">
+          <i class="fa-solid fa-lock" style="font-size:0.7rem;"></i> Tu clave se guarda localmente y nunca se comparte.
+        </p>
+      </div>
+      <button class="btn-primary" onclick="irPaso2()" style="width:100%;">
+        Siguiente — Transcribir <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- PANEL 2: TRANSCRIBIR -->
+  <div class="panel" id="panel2">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;">
+        <h2 style="font-size:1.05rem;font-weight:700;margin:0;color:#1e3a5f;">
+          <i class="fa-solid fa-microphone" style="margin-right:0.5rem;color:#2d5a8e;"></i>Transcripción
+        </h2>
+        <button class="btn-ghost" onclick="irPaso1()"><i class="fa-solid fa-arrow-left"></i> Atrás</button>
+      </div>
+      <div style="background:#edf4fc;border-radius:10px;padding:0.7rem 1rem;margin-bottom:1.5rem;font-size:0.85rem;color:#2d5a8e;display:flex;align-items:center;gap:0.5rem;">
+        <i class="fa-solid fa-circle-info"></i><span id="badgeTexto"></span>
+      </div>
+
+      <!-- TABS -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tabMic" onclick="setMode('mic')">
+          <i class="fa-solid fa-microphone"></i> Micrófono en directo
+          <span style="font-size:0.68rem;background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:99px;margin-left:4px;">Chrome</span>
+        </button>
+        <button class="mode-tab" id="tabFile" onclick="setMode('file')">
+          <i class="fa-solid fa-cloud-arrow-up"></i> Subir fichero
+          <span style="font-size:0.68rem;background:rgba(45,90,142,0.12);color:#2d5a8e;padding:1px 6px;border-radius:99px;margin-left:4px;" id="whisperBadge">Whisper</span>
+        </button>
+      </div>
+
+      <!-- MODO MICRÓFONO -->
+      <div id="modeMic">
+        <div style="text-align:center;padding:1.5rem 0;">
+          <button class="mic-btn idle" id="micBtn" onclick="toggleRecording()">
+            <i class="fa-solid fa-microphone" id="micIcon"></i>
+          </button>
+          <div style="margin-top:1rem;min-height:36px;" id="micStatus">
+            <p style="color:#8aa0b8;font-size:0.85rem;margin:0;">Pulsa el micrófono para empezar a grabar</p>
+          </div>
+          <div class="waveform" id="waveform" style="display:none;margin-top:0.5rem;">
+            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+            <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+          </div>
+          <div class="rec-timer" id="recTimer" style="display:none;margin-top:0.5rem;">00:00</div>
+        </div>
+        <div id="interimBox" style="display:none;margin-bottom:1rem;">
+          <label class="form-label">Transcripción en directo</label>
+          <div class="transcript-box" id="interimText" style="opacity:0.7;font-style:italic;"></div>
+        </div>
+        <div style="background:#fffbe6;border:1.5px solid #f0c040;border-radius:10px;padding:0.7rem 1rem;font-size:0.8rem;color:#7a5c00;margin-bottom:1rem;">
+          <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>
+          <strong>Solo Chrome / Edge:</strong> La Web Speech API no está disponible en Firefox o Safari. Usa la pestaña "Subir fichero" si usas otro navegador.
+        </div>
+      </div>
+
+      <!-- MODO FICHERO -->
+      <div id="modeFile" style="display:none;">
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="audioFile" accept="audio/*,video/mp4,video/webm" onchange="onFileSelected(this)">
+          <div>
+            <i class="fa-solid fa-cloud-arrow-up" style="font-size:2.2rem;color:#a0b8d0;margin-bottom:0.8rem;"></i>
+            <p style="font-weight:600;color:#2d5a8e;margin:0 0 0.3rem;">Arrastra aquí el fichero de audio</p>
+            <p style="font-size:0.8rem;color:#8aa0b8;margin:0;">o haz clic para seleccionar</p>
+            <p style="font-size:0.75rem;color:#b0c8e0;margin:0.5rem 0 0;">MP3, M4A, WAV, MP4, WebM · máx. 25 MB</p>
+          </div>
+        </div>
+        <div id="fileInfo" style="display:none;margin-top:1rem;padding:0.8rem 1rem;background:#edf4fc;border-radius:10px;align-items:center;gap:0.8rem;font-size:0.88rem;">
+          <i class="fa-solid fa-file-audio" style="color:#2d5a8e;font-size:1.1rem;"></i>
+          <div><div id="fileName" style="font-weight:600;color:#1a2332;"></div><div id="fileSize" style="color:#6b8caa;font-size:0.8rem;"></div></div>
+        </div>
+        <div id="transcProgress" style="display:none;margin-top:1.2rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.4rem;font-size:0.8rem;color:#4a6580;">
+            <span id="transcStatus">Enviando a Whisper…</span><span id="transcPct">0%</span>
+          </div>
+          <div class="progress-track"><div class="progress-fill" id="transcBar" style="width:0%"></div></div>
+        </div>
+        <div style="margin-top:1.2rem;">
+          <button class="btn-primary" id="btnTranscribir" onclick="transcribirWhisper()" disabled style="width:100%;">
+            <i class="fa-solid fa-waveform-lines"></i> Transcribir con Whisper
+          </button>
+        </div>
+      </div>
+
+      <!-- RESULTADO COMÚN -->
+      <div id="transcResult" style="display:none;margin-top:1.2rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <label class="form-label" style="margin:0;">Transcripción completa <span class="chip" id="langChip"></span></label>
+          <button class="btn-ghost" onclick="editarTranscript()"><i class="fa-solid fa-pen"></i> Editar</button>
+        </div>
+        <div class="transcript-box" id="transcriptBox"></div>
+        <p style="font-size:0.75rem;color:#8aa0b8;margin:0.4rem 0 0;">Revisa y corrige el texto antes de generar el acta.</p>
+      </div>
+      <div style="margin-top:1.5rem;">
+        <button class="btn-primary" id="btnGenerarActa" onclick="irPaso3()" style="display:none;width:100%;background:#1a6b3c;">
+          <i class="fa-solid fa-sliders"></i> Siguiente — Configurar acta
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: TIPO DE ACTA + PROMPT -->
+  <div class="panel" id="panel3">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;">
+        <h2 style="font-size:1.05rem;font-weight:700;margin:0;color:#1e3a5f;">
+          <i class="fa-solid fa-sliders" style="margin-right:0.5rem;color:#2d5a8e;"></i>Tipo de acta y prompt
+        </h2>
+        <button class="btn-ghost" onclick="irPaso2()"><i class="fa-solid fa-arrow-left"></i> Atrás</button>
+      </div>
+
+      <!-- Selector tipo de acta -->
+      <div style="margin-bottom:1.5rem;">
+        <label class="form-label">Tipo de acta</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem;" id="tipoActaGrid">
+          <button class="tipo-btn active" onclick="seleccionarTipo(this,'completa')" data-tipo="completa">
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Acta completa</span>
+            <small>Orden del día, temas y acuerdos</small>
+          </button>
+          <button class="tipo-btn" onclick="seleccionarTipo(this,'acuerdos')" data-tipo="acuerdos">
+            <i class="fa-solid fa-handshake"></i>
+            <span>Solo acuerdos</span>
+            <small>Lista de decisiones y responsables</small>
+          </button>
+          <button class="tipo-btn" onclick="seleccionarTipo(this,'descriptiva')" data-tipo="descriptiva">
+            <i class="fa-solid fa-align-left"></i>
+            <span>Acta descriptiva</span>
+            <small>Narración detallada de lo tratado</small>
+          </button>
+          <button class="tipo-btn" onclick="seleccionarTipo(this,'resumen')" data-tipo="resumen">
+            <i class="fa-solid fa-compress"></i>
+            <span>Resumen ejecutivo</span>
+            <small>Puntos clave en lenguaje directo</small>
+          </button>
+          <button class="tipo-btn" onclick="seleccionarTipo(this,'investigacion')" data-tipo="investigacion">
+            <i class="fa-solid fa-flask"></i>
+            <span>Reunión de investigación</span>
+            <small>Avances, tareas y próximos hitos</small>
+          </button>
+          <button class="tipo-btn" onclick="seleccionarTipo(this,'personalizado')" data-tipo="personalizado">
+            <i class="fa-solid fa-pen-to-square"></i>
+            <span>Personalizado</span>
+            <small>Edita el prompt libremente</small>
+          </button>
+        </div>
+      </div>
+
+      <!-- Editor de prompt -->
+      <div style="margin-bottom:1.5rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.4rem;">
+          <label class="form-label" style="margin:0;">Prompt del sistema</label>
+          <button class="btn-ghost" style="font-size:0.78rem;padding:0.3rem 0.6rem;" onclick="resetPrompt()">
+            <i class="fa-solid fa-rotate-left"></i> Restablecer
+          </button>
+        </div>
+        <textarea id="promptEditor" rows="10" style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.6;"></textarea>
+        <p style="font-size:0.75rem;color:#8aa0b8;margin:0.4rem 0 0;">
+          <i class="fa-solid fa-circle-info" style="margin-right:3px;"></i>
+          Puedes modificar libremente las instrucciones. El JSON de salida debe mantener la estructura para que la exportación funcione correctamente.
+        </p>
+      </div>
+
+      <button class="btn-primary" onclick="irPaso4()" style="width:100%;background:#1a6b3c;">
+        <i class="fa-solid fa-file-lines"></i> Generar acta
+      </button>
+    </div>
+  </div>
+
+  <!-- PANEL 4: ACTA -->
+  <div class="panel" id="panel4">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:0.5rem;">
+        <h2 style="font-size:1.05rem;font-weight:700;margin:0;color:#1e3a5f;">
+          <i class="fa-solid fa-file-lines" style="margin-right:0.5rem;color:#2d5a8e;"></i>Acta generada
+        </h2>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+          <button class="btn-ghost" onclick="irPaso3()"><i class="fa-solid fa-arrow-left"></i> Atrás</button>
+          <button class="btn-secondary" onclick="regenerar()"><i class="fa-solid fa-rotate-right"></i> Regenerar</button>
+        </div>
+      </div>
+      <div id="generatingState" style="text-align:center;padding:3rem 1rem;">
+        <div style="width:56px;height:56px;border-radius:50%;background:#edf4fc;display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;">
+          <i class="fa-solid fa-brain" style="font-size:1.4rem;color:#2d5a8e;"></i>
+        </div>
+        <p style="font-weight:600;color:#2d5a8e;margin:0 0 0.5rem;">Analizando la transcripción…</p>
+        <p style="font-size:0.82rem;color:#8aa0b8;margin:0;" id="genStep">Identificando temas tratados</p>
+        <div class="progress-track" style="max-width:240px;margin:1rem auto 0;">
+          <div class="progress-fill" id="genBar" style="width:10%;"></div>
+        </div>
+      </div>
+      <div id="actaContent" style="display:none;">
+        <div id="actaBody"></div>
+        <div style="border-top:1.5px solid #e0eaf5;padding-top:1.2rem;margin-top:1.5rem;display:flex;gap:0.8rem;flex-wrap:wrap;">
+          <button class="btn-primary" onclick="exportarWord()" id="btnWord"><i class="fa-solid fa-file-word"></i> Descargar Word</button>
+          <button class="btn-primary" onclick="exportarPDF()" style="background:#c0392b;" id="btnPDF"><i class="fa-solid fa-file-pdf"></i> Descargar PDF</button>
+          <button class="btn-ghost" onclick="copiarTexto()"><i class="fa-regular fa-copy"></i> Copiar texto</button>
+        </div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:1.2rem;">
+      <button class="btn-ghost" onclick="nuevaReunion()"><i class="fa-solid fa-plus"></i> Nueva reunión</button>
+    </div>
+  </div>
+
+</main>
+
+<div class="toast" id="toast"><i class="fa-solid fa-circle-check"></i> <span id="toastMsg"></span></div>
+
+<script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+// STATE
+let transcript = '', detectedLang = '', actaData = null, selectedFile = null, activeMode = 'mic';
+let recognition = null, isRecording = false, isPaused = false;
+let recInterval = null, recSeconds = 0;
+let accumulatedTranscript = '', interimTranscript = '';
+
+// PROMPTS por tipo de acta
+const PROMPTS = {
+  completa: `Eres un secretario experto en actas universitarias. Convierte la transcripción en un acta estructurada y formal. El idioma del acta debe coincidir con el de la transcripción. Incluye orden del día, resumen de todos los temas tratados y lista completa de acuerdos con responsable y plazo. Responde ÚNICAMENTE con JSON válido sin texto adicional:\n{"titulo":"","orden_dia":[],"temas_tratados":[{"titulo":"","resumen":""}],"acuerdos":[{"descripcion":"","responsable":"","plazo":""}],"proxima_reunion":""}`,
+
+  acuerdos: `Eres un secretario experto en actas universitarias. Extrae ÚNICAMENTE los acuerdos, decisiones y tareas asignadas de la transcripción. Ignora los debates y deliberaciones; céntrate en lo que se ha decidido, quién es responsable y en qué plazo. El idioma debe coincidir con el de la transcripción. Responde ÚNICAMENTE con JSON válido:\n{"titulo":"","orden_dia":[],"temas_tratados":[],"acuerdos":[{"descripcion":"","responsable":"","plazo":""}],"proxima_reunion":""}`,
+
+  descriptiva: `Eres un secretario experto en actas universitarias. Redacta un acta descriptiva y detallada que narre cronológicamente todo lo ocurrido en la reunión: quién dijo qué, qué argumentos se plantearon, qué debate se produjo y a qué conclusiones se llegó. El tono es formal y objetivo, en tercera persona. El idioma debe coincidir con el de la transcripción. Responde ÚNICAMENTE con JSON válido:\n{"titulo":"","orden_dia":[],"temas_tratados":[{"titulo":"","resumen":""}],"acuerdos":[{"descripcion":"","responsable":"","plazo":""}],"proxima_reunion":""}`,
+
+  resumen: `Eres un secretario experto. Genera un resumen ejecutivo de la reunión: qué se trató, qué se decidió y cuáles son los próximos pasos. Lenguaje directo, conciso y orientado a la acción. Máximo 5 puntos clave por sección. El idioma debe coincidir con el de la transcripción. Responde ÚNICAMENTE con JSON válido:\n{"titulo":"","orden_dia":[],"temas_tratados":[{"titulo":"","resumen":""}],"acuerdos":[{"descripcion":"","responsable":"","plazo":""}],"proxima_reunion":""}`,
+
+  investigacion: `Eres un secretario especializado en proyectos de investigación universitaria. Genera un acta técnica que recoja: estado de avance de cada línea de trabajo, problemas o bloqueos identificados, decisiones metodológicas tomadas, tareas asignadas con responsable y plazo, y próximos hitos del proyecto. El idioma debe coincidir con el de la transcripción. Responde ÚNICAMENTE con JSON válido:\n{"titulo":"","orden_dia":[],"temas_tratados":[{"titulo":"","resumen":""}],"acuerdos":[{"descripcion":"","responsable":"","plazo":""}],"proxima_reunion":""}`,
+
+  personalizado: `Eres un secretario experto en actas universitarias. Convierte la transcripción en un acta estructurada. El idioma del acta debe coincidir con el de la transcripción. Responde ÚNICAMENTE con JSON válido sin texto adicional:\n{"titulo":"","orden_dia":[],"temas_tratados":[{"titulo":"","resumen":""}],"acuerdos":[{"descripcion":"","responsable":"","plazo":""}],"proxima_reunion":""}`
+};
+
+let tipoActaActivo = 'completa';
+
+window.onload = () => {
+  const k = localStorage.getItem('actaai_apikey');
+  if (k) document.getElementById('apiKey').value = k;
+  document.getElementById('fechaReunion').value = new Date().toISOString().split('T')[0];
+  document.getElementById('promptEditor').value = PROMPTS.completa;
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    const t = document.getElementById('tabMic');
+    t.disabled = true; t.style.opacity = '0.5'; t.title = 'No disponible en este navegador';
+    setMode('file');
+  }
+};
+
+// STEPS (ahora 4)
+function setStep(n) {
+  [1,2,3,4].forEach(i => {
+    document.getElementById('panel'+i).classList.toggle('active', i===n);
+    const sc = document.getElementById('sc'+i), sl = document.getElementById('sl'+i);
+    sc.classList.remove('active','done');
+    if (i < n) sc.classList.add('done');
+    else if (i === n) sc.classList.add('active');
+    sl.classList.toggle('active', i===n);
+  });
+  [1,2,3].forEach(i => document.getElementById('con'+i).classList.toggle('done', i<n));
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function irPaso1() { stopRecording(); setStep(1); }
+
+function irPaso2() {
+  const k = document.getElementById('apiKey').value.trim();
+  if (!k) { showToast('Introduce tu clave API de OpenAI','error'); return; }
+  localStorage.setItem('actaai_apikey', k);
+  const tipo = document.getElementById('tipoReunion').selectedOptions[0].text;
+  const nombre = document.getElementById('nombreReunion').value.trim() || 'Sin nombre';
+  const fecha = document.getElementById('fechaReunion').value;
+  document.getElementById('badgeTexto').textContent = `${nombre} · ${tipo} · ${fecha}`;
+  setStep(2);
+}
+
+function irPaso3() {
+  if (!transcript || transcript.trim().length < 10) {
+    showToast('Primero transcribe la reunión','error'); return;
+  }
+  setStep(3);
+}
+
+async function irPaso4() { setStep(4); await generarActa(); }
+
+// TIPO DE ACTA
+function seleccionarTipo(btn, tipo) {
+  document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  tipoActaActivo = tipo;
+  document.getElementById('promptEditor').value = PROMPTS[tipo];
+}
+
+function resetPrompt() {
+  document.getElementById('promptEditor').value = PROMPTS[tipoActaActivo];
+  showToast('Prompt restablecido','success');
+}
+
+// MODE SWITCH
+function setMode(mode) {
+  activeMode = mode;
+  document.getElementById('tabMic').classList.toggle('active', mode==='mic');
+  document.getElementById('tabFile').classList.toggle('active', mode==='file');
+  document.getElementById('modeMic').style.display = mode==='mic'?'block':'none';
+  document.getElementById('modeFile').style.display = mode==='file'?'block':'none';
+  if (transcript) showTranscriptResult();
+}
+
+// WEB SPEECH API
+function initRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+  recognition.onstart = () => {
+    isRecording = true;
+    updateMicUI('recording'); startTimer();
+    document.getElementById('interimBox').style.display = 'block';
+    document.getElementById('waveform').style.display = 'flex';
+    document.getElementById('recTimer').style.display = 'block';
+    document.getElementById('micStatus').innerHTML = '<span style="color:#e74c3c;font-weight:600;font-size:0.85rem;"><span style="display:inline-block;width:8px;height:8px;background:#e74c3c;border-radius:50%;margin-right:5px;"></span>Grabando… Pulsa para pausar</span>';
+  };
+  recognition.onresult = (e) => {
+    let final = '', interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t + ' '; else interim += t;
+    }
+    if (final) accumulatedTranscript += final;
+    interimTranscript = interim;
+    document.getElementById('interimText').textContent = accumulatedTranscript + (interim ? '… ' + interim : '');
+  };
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return;
+    showToast('Error de micrófono: ' + e.error, 'error'); stopRecording();
+  };
+  recognition.onend = () => { if (isRecording && !isPaused) { try { recognition.start(); } catch(e){} } };
+}
+
+function toggleRecording() {
+  if (!isRecording && !isPaused) startRecording();
+  else if (isRecording && !isPaused) pauseRecording();
+  else resumeRecording();
+}
+
+function startRecording() {
+  if (!isPaused) { accumulatedTranscript = ''; interimTranscript = ''; recSeconds = 0; }
+  initRecognition();
+  try { recognition.start(); } catch(e) { showToast('No se pudo acceder al micrófono: ' + e.message, 'error'); }
+}
+
+function pauseRecording() {
+  isPaused = true; isRecording = false;
+  try { recognition.stop(); } catch(e){}
+  stopTimer(); updateMicUI('paused');
+  document.getElementById('waveform').style.display = 'none';
+  document.getElementById('micStatus').innerHTML = '<span style="color:#f39c12;font-weight:600;font-size:0.85rem;">⏸ En pausa — Pulsa para continuar</span>';
+  if (!document.getElementById('btnStopRec')) {
+    const b = document.createElement('button');
+    b.id = 'btnStopRec'; b.className = 'btn-secondary';
+    b.style = 'margin-top:1rem;width:100%;';
+    b.innerHTML = '<i class="fa-solid fa-stop"></i> Finalizar grabación';
+    b.onclick = stopRecording;
+    document.getElementById('micStatus').insertAdjacentElement('afterend', b);
+  }
+}
+
+function resumeRecording() {
+  isPaused = false;
+  const b = document.getElementById('btnStopRec'); if (b) b.remove();
+  startRecording();
+}
+
+function stopRecording() {
+  isRecording = false; isPaused = false;
+  stopTimer();
+  try { if (recognition) recognition.abort(); } catch(e){}
+  recognition = null;
+  updateMicUI('idle');
+  document.getElementById('waveform').style.display = 'none';
+  document.getElementById('recTimer').style.display = 'none';
+  document.getElementById('micStatus').innerHTML = '<p style="color:#8aa0b8;font-size:0.85rem;margin:0;">Pulsa el micrófono para empezar a grabar</p>';
+  const b = document.getElementById('btnStopRec'); if (b) b.remove();
+  const full = (accumulatedTranscript + ' ' + interimTranscript).trim();
+  if (full.length > 10) {
+    transcript = full; detectedLang = 'Chrome Speech';
+    document.getElementById('interimBox').style.display = 'none';
+    showTranscriptResult();
+    showToast('Grabación finalizada', 'success');
+  }
+}
+
+function updateMicUI(state) {
+  const btn = document.getElementById('micBtn'), icon = document.getElementById('micIcon');
+  btn.className = 'mic-btn ' + state;
+  icon.className = state==='recording'?'fa-solid fa-pause':state==='paused'?'fa-solid fa-play':'fa-solid fa-microphone';
+}
+
+function startTimer() {
+  stopTimer();
+  recInterval = setInterval(() => {
+    recSeconds++;
+    const m = String(Math.floor(recSeconds/60)).padStart(2,'0');
+    const s = String(recSeconds%60).padStart(2,'0');
+    document.getElementById('recTimer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+function stopTimer() { if (recInterval) { clearInterval(recInterval); recInterval = null; } }
+
+// WHISPER
+function onFileSelected(input) {
+  const file = input.files[0]; if (!file) return;
+  if (file.size > 26*1024*1024) { showToast('El fichero supera 25 MB (límite de Whisper)', 'error'); return; }
+  selectedFile = file;
+  document.getElementById('uploadZone').classList.add('has-file');
+  document.getElementById('fileInfo').style.display = 'flex';
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('fileSize').textContent = formatBytes(file.size);
+  document.getElementById('btnTranscribir').disabled = false;
+  document.getElementById('transcResult').style.display = 'none';
+  document.getElementById('btnGenerarActa').style.display = 'none';
+  transcript = '';
+}
+
+async function transcribirWhisper() {
+  if (!selectedFile) return;
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const btn = document.getElementById('btnTranscribir');
+  btn.disabled = true; btn.innerHTML = '<div class="spinner"></div> Enviando…';
+  document.getElementById('transcProgress').style.display = 'block';
+  animateBar('transcBar','transcPct','transcStatus',[[0,'Preparando audio…'],[15,'Enviando a Whisper API…'],[40,'Transcribiendo…'],[75,'Procesando texto…'],[90,'Casi listo…']]);
+  try {
+    const fd = new FormData();
+    fd.append('file', selectedFile, selectedFile.name);
+    fd.append('model', 'whisper-1');
+    fd.append('response_format', 'verbose_json');
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method:'POST', headers:{'Authorization':`Bearer ${apiKey}`}, body:fd
+    });
+    if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message||'Error Whisper'); }
+    const data = await res.json();
+    transcript = data.text || ''; detectedLang = data.language || 'desconocido';
+    setBar('transcBar','transcPct',100);
+    document.getElementById('transcStatus').textContent = '✓ Completado';
+    btn.innerHTML = '<i class="fa-solid fa-check"></i> Transcrito'; btn.style.background = '#1a6b3c';
+    showTranscriptResult(); showToast('Transcripción completada','success');
+  } catch(e) {
+    btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-waveform-lines"></i> Reintentar';
+    document.getElementById('transcProgress').style.display = 'none';
+    showToast('Error: '+e.message,'error');
+  }
+}
+
+function showTranscriptResult() {
+  document.getElementById('transcResult').style.display = 'block';
+  document.getElementById('transcriptBox').textContent = transcript;
+  document.getElementById('langChip').innerHTML = `<i class="fa-solid fa-language"></i> ${detectedLang}`;
+  document.getElementById('btnGenerarActa').style.display = 'flex';
+}
+
+function editarTranscript() {
+  const box = document.getElementById('transcriptBox');
+  const editable = box.contentEditable === 'true';
+  if (!editable) { box.contentEditable='true'; box.style.background='#fffdf0'; box.style.borderColor='#e6c200'; box.focus(); }
+  else { box.contentEditable='false'; box.style.background=''; box.style.borderColor=''; transcript=box.textContent; showToast('Transcripción actualizada','success'); }
+}
+
+// GENERAR ACTA
+async function generarActa() {
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const tipo = document.getElementById('tipoReunion').selectedOptions[0].text;
+  const nombre = document.getElementById('nombreReunion').value.trim()||'Reunión sin título';
+  const fecha = document.getElementById('fechaReunion').value;
+  const lugar = document.getElementById('lugarReunion').value.trim();
+  const asistentes = document.getElementById('asistentes').value.trim();
+  const sys = document.getElementById('promptEditor').value.trim();
+
+  document.getElementById('generatingState').style.display = 'block';
+  document.getElementById('actaContent').style.display = 'none';
+  const steps = ['Identificando temas tratados…','Extrayendo orden del día…','Detectando acuerdos…','Redactando acta formal…','Revisando coherencia…'];
+  let si = 0;
+  const stepInt = setInterval(() => {
+    if (si<steps.length) { document.getElementById('genStep').textContent=steps[si++]; setBar('genBar',null,Math.min(10+si*15,90)); }
+  }, 1800);
+  const usr = `Reunión: ${nombre}\nTipo: ${tipo}\nFecha: ${fecha}${lugar?'\nLugar: '+lugar:''}${asistentes?'\nAsistentes: '+asistentes:''}\n\nTRANSCRIPCIÓN:\n${transcript}`;
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST', headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body: JSON.stringify({model:'gpt-4o-mini',max_tokens:2000,temperature:0.3,messages:[{role:'system',content:sys},{role:'user',content:usr}]})
+    });
+    if (!res.ok) { const e=await res.json(); throw new Error(e.error?.message||'Error API'); }
+    const data = await res.json();
+    clearInterval(stepInt); setBar('genBar',null,100);
+    let raw = data.choices[0].message.content.trim().replace(/```json|```/g,'').trim();
+    actaData = JSON.parse(raw);
+    actaData._meta = {nombre,tipo,fecha,lugar,asistentes};
+    setTimeout(() => { document.getElementById('generatingState').style.display='none'; document.getElementById('actaContent').style.display='block'; renderActa(actaData); }, 400);
+  } catch(e) {
+    clearInterval(stepInt);
+    document.getElementById('generatingState').style.display='none';
+    showToast('Error al generar el acta: '+e.message,'error'); setStep(3);
+  }
+}
+
+function renderActa(d) {
+  const m = d._meta;
+  const arr = m.asistentes ? m.asistentes.split('\n').filter(a=>a.trim()) : [];
+  let html = `<div style="border-bottom:2px solid #e0eaf5;padding-bottom:1rem;margin-bottom:1.5rem;">
+    <h2 style="font-size:1.1rem;font-weight:700;color:#1e3a5f;margin:0 0 0.5rem;">${d.titulo||m.nombre}</h2>
+    <div style="display:flex;flex-wrap:wrap;gap:0.5rem;font-size:0.82rem;color:#6b8caa;">
+      <span><i class="fa-regular fa-calendar" style="margin-right:3px;"></i>${m.fecha}</span>
+      ${m.lugar?`<span><i class="fa-solid fa-location-dot" style="margin-right:3px;"></i>${m.lugar}</span>`:''}
+      <span><i class="fa-solid fa-tag" style="margin-right:3px;"></i>${m.tipo}</span>
+    </div></div>`;
+  if (arr.length>0) {
+    html+=`<div class="acta-section"><div class="acta-section-title"><i class="fa-solid fa-users" style="margin-right:6px;"></i>Asistentes</div>
+    <div style="display:flex;flex-wrap:wrap;gap:0.4rem;">${arr.map(a=>`<span class="chip"><i class="fa-regular fa-user"></i>${a.trim()}</span>`).join('')}</div></div>`;
+  }
+  if (d.orden_dia?.length>0) {
+    html+=`<div class="acta-section"><div class="acta-section-title"><i class="fa-solid fa-list-ol" style="margin-right:6px;"></i>Orden del día</div>
+    <ol style="margin:0;padding-left:1.3rem;">${d.orden_dia.map(p=>`<li style="font-size:0.9rem;margin-bottom:0.3rem;">${p}</li>`).join('')}</ol></div>`;
+  }
+  if (d.temas_tratados?.length>0) {
+    html+=`<div class="acta-section"><div class="acta-section-title"><i class="fa-solid fa-comments" style="margin-right:6px;"></i>Temas tratados</div>`;
+    d.temas_tratados.forEach((t,i)=>html+=`<div style="margin-bottom:1rem;padding:0.8rem 1rem;background:#f7fafd;border-radius:10px;border-left:3px solid #2d5a8e;">
+      <div style="font-weight:600;font-size:0.88rem;color:#1e3a5f;margin-bottom:0.3rem;">${i+1}. ${t.titulo}</div>
+      <div style="font-size:0.87rem;color:#4a6580;line-height:1.65;">${t.resumen}</div></div>`);
+    html+=`</div>`;
+  }
+  if (d.acuerdos?.length>0) {
+    html+=`<div class="acta-section"><div class="acta-section-title"><i class="fa-solid fa-handshake" style="margin-right:6px;"></i>Acuerdos y tareas</div>`;
+    d.acuerdos.forEach(a=>html+=`<div style="margin-bottom:0.8rem;padding:0.8rem 1rem;background:#f0faf5;border-radius:10px;border-left:3px solid #1a6b3c;">
+      <div style="font-size:0.88rem;font-weight:500;margin-bottom:0.25rem;">✓ ${a.descripcion}</div>
+      <div style="font-size:0.78rem;color:#6b8caa;display:flex;gap:0.8rem;flex-wrap:wrap;margin-top:0.2rem;">
+        ${a.responsable?`<span><i class="fa-regular fa-user" style="margin-right:3px;"></i>${a.responsable}</span>`:''}
+        ${a.plazo?`<span><i class="fa-regular fa-clock" style="margin-right:3px;"></i>${a.plazo}</span>`:''}
+      </div></div>`);
+    html+=`</div>`;
+  }
+  if (d.proxima_reunion) html+=`<div class="acta-section"><div class="acta-section-title"><i class="fa-solid fa-calendar-plus" style="margin-right:6px;"></i>Próxima reunión</div><p style="font-size:0.9rem;margin:0;">${d.proxima_reunion}</p></div>`;
+  document.getElementById('actaBody').innerHTML = html;
+}
+
+async function regenerar() {
+  document.getElementById('actaContent').style.display='none';
+  document.getElementById('generatingState').style.display='block';
+  document.getElementById('genStep').textContent='Regenerando acta…';
+  setBar('genBar',null,10); await generarActa();
+}
+
+// EXPORT WORD
+async function exportarWord() {
+  if (!actaData) return;
+  const btn = document.getElementById('btnWord');
+  btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Generando…';
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,LevelFormat,BorderStyle} = docx;
+  const m = actaData._meta;
+  const arr = m.asistentes?m.asistentes.split('\n').filter(a=>a.trim()):[];
+  const ch = [];
+  const sep = ()=>new Paragraph({children:[],border:{bottom:{style:BorderStyle.SINGLE,size:4,color:'CCCCCC',space:4}},spacing:{before:200,after:200}});
+  ch.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun({text:actaData.titulo||m.nombre,bold:true,size:32,font:'Arial'})]}));
+  ch.push(new Paragraph({children:[new TextRun({text:`Fecha: ${m.fecha}`,size:20,font:'Arial',color:'555555'})]}));
+  if(m.lugar)ch.push(new Paragraph({children:[new TextRun({text:`Lugar: ${m.lugar}`,size:20,font:'Arial',color:'555555'})]}));
+  ch.push(new Paragraph({children:[new TextRun({text:`Tipo: ${m.tipo}`,size:20,font:'Arial',color:'555555'})]}));
+  ch.push(sep());
+  if(arr.length>0){
+    ch.push(new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:'Asistentes',bold:true,size:24,font:'Arial'})]}));
+    arr.forEach(a=>ch.push(new Paragraph({numbering:{reference:'bullets',level:0},children:[new TextRun({text:a.trim(),size:20,font:'Arial'})]})));
+    ch.push(sep());
+  }
+  if(actaData.orden_dia?.length>0){
+    ch.push(new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:'Orden del día',bold:true,size:24,font:'Arial'})]}));
+    actaData.orden_dia.forEach(p=>ch.push(new Paragraph({numbering:{reference:'numbers',level:0},children:[new TextRun({text:p,size:20,font:'Arial'})]})));
+    ch.push(sep());
+  }
+  if(actaData.temas_tratados?.length>0){
+    ch.push(new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:'Temas tratados',bold:true,size:24,font:'Arial'})]}));
+    actaData.temas_tratados.forEach((t,i)=>{
+      ch.push(new Paragraph({children:[new TextRun({text:`${i+1}. ${t.titulo}`,bold:true,size:22,font:'Arial'})]}));
+      ch.push(new Paragraph({children:[new TextRun({text:t.resumen,size:20,font:'Arial'})],spacing:{after:120}}));
+    });
+    ch.push(sep());
+  }
+  if(actaData.acuerdos?.length>0){
+    ch.push(new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:'Acuerdos y tareas',bold:true,size:24,font:'Arial'})]}));
+    actaData.acuerdos.forEach(a=>ch.push(new Paragraph({numbering:{reference:'bullets',level:0},children:[
+      new TextRun({text:a.descripcion,size:20,font:'Arial'}),
+      ...(a.responsable?[new TextRun({text:`  — ${a.responsable}`,size:18,font:'Arial',color:'555555'})]:[]),
+      ...(a.plazo?[new TextRun({text:` (${a.plazo})`,size:18,font:'Arial',color:'555555',italics:true})]:[])
+    ]})));
+    ch.push(sep());
+  }
+  if(actaData.proxima_reunion){
+    ch.push(new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:'Próxima reunión',bold:true,size:24,font:'Arial'})]}));
+    ch.push(new Paragraph({children:[new TextRun({text:actaData.proxima_reunion,size:20,font:'Arial'})]}));
+  }
+  const doc2 = new Document({
+    styles:{default:{document:{run:{font:'Arial',size:20}}},paragraphStyles:[
+      {id:'Heading1',name:'Heading 1',basedOn:'Normal',next:'Normal',quickFormat:true,run:{size:32,bold:true,font:'Arial',color:'1E3A5F'},paragraph:{spacing:{before:300,after:200},outlineLevel:0}},
+      {id:'Heading2',name:'Heading 2',basedOn:'Normal',next:'Normal',quickFormat:true,run:{size:24,bold:true,font:'Arial',color:'2D5A8E'},paragraph:{spacing:{before:240,after:120},outlineLevel:1}}
+    ]},
+    numbering:{config:[
+      {reference:'bullets',levels:[{level:0,format:LevelFormat.BULLET,text:'•',alignment:AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]},
+      {reference:'numbers',levels:[{level:0,format:LevelFormat.DECIMAL,text:'%1.',alignment:AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]}
+    ]},
+    sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:1440,right:1440,bottom:1440,left:1440}}},children:ch}]
+  });
+  const buf = await Packer.toBuffer(doc2);
+  const blob = new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`acta_${m.fecha}_${m.nombre.replace(/\s+/g,'_').substring(0,30)}.docx`;
+  a.click(); URL.revokeObjectURL(url);
+  btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-file-word"></i> Descargar Word';
+  showToast('Word descargado','success');
+}
+
+// EXPORT PDF
+function exportarPDF() {
+  if (!actaData) return;
+  const btn = document.getElementById('btnPDF');
+  btn.disabled=true; btn.innerHTML='<div class="spinner"></div> Generando…';
+  const m = actaData._meta;
+  const arr = m.asistentes?m.asistentes.split('\n').filter(a=>a.trim()):[];
+  let html=`<style>body{font-family:Arial,sans-serif;font-size:11pt;color:#1a2332}h1{font-size:16pt;color:#1e3a5f;margin-bottom:4px}h2{font-size:12pt;color:#2d5a8e;margin-top:18px;margin-bottom:6px;border-bottom:1px solid #d0dcea;padding-bottom:4px}.meta{font-size:9pt;color:#6b8caa;margin-bottom:14px}ul,ol{padding-left:18px;margin:6px 0}li{margin-bottom:4px}.tema{background:#f7fafd;border-left:3px solid #2d5a8e;padding:8px 10px;margin-bottom:8px}.t-t{font-weight:bold;font-size:10pt}.ac{background:#f0faf5;border-left:3px solid #1a6b3c;padding:8px 10px;margin-bottom:6px}.ml{font-size:9pt;color:#8aa0b8;margin-top:2px}</style>`;
+  html+=`<h1>${actaData.titulo||m.nombre}</h1><div class="meta">Fecha: ${m.fecha}${m.lugar?' · '+m.lugar:''} · ${m.tipo}</div>`;
+  if(arr.length>0)html+=`<h2>Asistentes</h2><ul>${arr.map(a=>`<li>${a.trim()}</li>`).join('')}</ul>`;
+  if(actaData.orden_dia?.length>0)html+=`<h2>Orden del día</h2><ol>${actaData.orden_dia.map(p=>`<li>${p}</li>`).join('')}</ol>`;
+  if(actaData.temas_tratados?.length>0){
+    html+=`<h2>Temas tratados</h2>`;
+    actaData.temas_tratados.forEach((t,i)=>html+=`<div class="tema"><div class="t-t">${i+1}. ${t.titulo}</div><div>${t.resumen}</div></div>`);
+  }
+  if(actaData.acuerdos?.length>0){
+    html+=`<h2>Acuerdos y tareas</h2>`;
+    actaData.acuerdos.forEach(a=>html+=`<div class="ac">${a.descripcion}${(a.responsable||a.plazo)?`<div class="ml">${a.responsable?'👤 '+a.responsable:''}${a.responsable&&a.plazo?' · ':''}${a.plazo?'⏰ '+a.plazo:''}</div>`:''}</div>`);
+  }
+  if(actaData.proxima_reunion)html+=`<h2>Próxima reunión</h2><p>${actaData.proxima_reunion}</p>`;
+  const el=document.createElement('div'); el.innerHTML=html; document.body.appendChild(el);
+  const fn=`acta_${m.fecha}_${m.nombre.replace(/\s+/g,'_').substring(0,30)}.pdf`;
+  html2pdf().set({margin:[15,15,15,15],filename:fn,image:{type:'jpeg',quality:0.98},html2canvas:{scale:2,useCORS:true},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}})
+    .from(el).save().then(()=>{
+      document.body.removeChild(el);
+      btn.disabled=false; btn.innerHTML='<i class="fa-solid fa-file-pdf"></i> Descargar PDF';
+      showToast('PDF descargado','success');
+    });
+}
+
+// UTILITIES
+function copiarTexto() {
+  if (!actaData) return;
+  const m=actaData._meta; const arr=m.asistentes?m.asistentes.split('\n').filter(a=>a.trim()):[];
+  let t=`${actaData.titulo||m.nombre}\nFecha: ${m.fecha}\n${m.lugar?'Lugar: '+m.lugar+'\n':''}\n`;
+  if(arr.length>0)t+=`ASISTENTES\n${arr.map(a=>'• '+a.trim()).join('\n')}\n\n`;
+  if(actaData.orden_dia?.length>0)t+=`ORDEN DEL DÍA\n${actaData.orden_dia.map((p,i)=>`${i+1}. ${p}`).join('\n')}\n\n`;
+  if(actaData.temas_tratados?.length>0)t+=`TEMAS TRATADOS\n${actaData.temas_tratados.map((x,i)=>`${i+1}. ${x.titulo}\n${x.resumen}`).join('\n\n')}\n\n`;
+  if(actaData.acuerdos?.length>0)t+=`ACUERDOS Y TAREAS\n${actaData.acuerdos.map(a=>`• ${a.descripcion}${a.responsable?' ['+a.responsable+']':''}${a.plazo?' ('+a.plazo+')':''}`).join('\n')}\n\n`;
+  if(actaData.proxima_reunion)t+=`PRÓXIMA REUNIÓN\n${actaData.proxima_reunion}\n`;
+  navigator.clipboard.writeText(t).then(()=>showToast('Copiado al portapapeles','success'));
+}
+
+function nuevaReunion() {
+  stopRecording(); transcript=''; actaData=null; selectedFile=null;
+  document.getElementById('audioFile').value='';
+  document.getElementById('uploadZone').classList.remove('has-file');
+  document.getElementById('fileInfo').style.display='none';
+  document.getElementById('transcProgress').style.display='none';
+  document.getElementById('transcResult').style.display='none';
+  document.getElementById('btnGenerarActa').style.display='none';
+  document.getElementById('btnTranscribir').disabled=true;
+  document.getElementById('btnTranscribir').innerHTML='<i class="fa-solid fa-waveform-lines"></i> Transcribir con Whisper';
+  document.getElementById('btnTranscribir').style.background='';
+  document.getElementById('interimBox').style.display='none';
+  document.getElementById('interimText').textContent='';
+  accumulatedTranscript=''; interimTranscript='';
+  document.getElementById('nombreReunion').value='';
+  document.getElementById('asistentes').value='';
+  document.getElementById('lugarReunion').value='';
+  document.getElementById('fechaReunion').value=new Date().toISOString().split('T')[0];
+  // Reset tipo acta
+  tipoActaActivo='completa';
+  document.querySelectorAll('.tipo-btn').forEach(b=>b.classList.remove('active'));
+  document.querySelector('[data-tipo="completa"]').classList.add('active');
+  document.getElementById('promptEditor').value=PROMPTS.completa;
+  setMode('mic'); setStep(1);
+}
+
+function toggleApiKey() {
+  const i=document.getElementById('apiKey'), ic=document.getElementById('eyeIcon');
+  i.type=i.type==='password'?'text':'password';
+  ic.className=i.type==='password'?'fa-regular fa-eye':'fa-regular fa-eye-slash';
+}
+
+function formatBytes(b){if(b<1024)return b+' B';if(b<1024*1024)return(b/1024).toFixed(1)+' KB';return(b/(1024*1024)).toFixed(1)+' MB';}
+
+function animateBar(barId,pctId,statusId,steps){
+  let idx=0;
+  const go=()=>{if(idx<steps.length){const[pct,msg]=steps[idx++];setBar(barId,pctId,pct);if(statusId)document.getElementById(statusId).textContent=msg;setTimeout(go,1200+Math.random()*600);}};
+  go();
+}
+function setBar(barId,pctId,pct){document.getElementById(barId).style.width=pct+'%';if(pctId)document.getElementById(pctId).textContent=pct+'%';}
+
+let toastTimer;
+function showToast(msg,type='info'){
+  const t=document.getElementById('toast');
+  t.className='toast'+(type==='error'?' error':type==='success'?' success':'');
+  t.querySelector('i').className=type==='error'?'fa-solid fa-circle-xmark':type==='success'?'fa-solid fa-circle-check':'fa-solid fa-circle-info';
+  document.getElementById('toastMsg').textContent=msg;
+  t.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+// Drag & drop
+const zone=document.getElementById('uploadZone');
+zone.addEventListener('dragover',e=>{e.preventDefault();zone.classList.add('dragover');});
+zone.addEventListener('dragleave',()=>zone.classList.remove('dragover'));
+zone.addEventListener('drop',e=>{
+  e.preventDefault();zone.classList.remove('dragover');
+  const file=e.dataTransfer.files[0];
+  if(file){const dt=new DataTransfer();dt.items.add(file);document.getElementById('audioFile').files=dt.files;onFileSelected(document.getElementById('audioFile'));}
+});
+</script>
+</body>
+</html>
